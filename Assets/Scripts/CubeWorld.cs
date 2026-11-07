@@ -50,6 +50,7 @@ namespace DjVisuals
             public float delay, x;
             public Quaternion rot = Quaternion.identity;
             public float zoom = 1f;
+            public float fit;                       // 0 = plain cube, 1 = stretched to fill its screen exactly
             public Transform glow; public Material glowMat;
         }
         readonly Struct[] structs = new Struct[3];   // 0 center, 1 left, 2 right
@@ -90,7 +91,7 @@ namespace DjVisuals
             {
                 var root = new GameObject("Cube" + i).transform;
                 root.SetParent(transform);
-                var st = new Struct { root = root, delay = i == 0 ? 0f : 1f, x = i == 0 ? 0f : (i == 1 ? -spacing : spacing) };
+                var st = new Struct { root = root, delay = 0f, x = i == 0 ? 0f : (i == 1 ? -spacing : spacing) };
                 root.localPosition = new Vector3(st.x, 0f, 0f);
 
                 // the bold outer frame
@@ -241,7 +242,7 @@ namespace DjVisuals
                 case 1: return Quaternion.Euler(0f, 0f, 12f);
                 case 2: return Quaternion.Euler(0f, 28f, -14f);
                 case 4: return Quaternion.Euler(-52f, 0f, 0f);                    // tipped toward us: a high-angle view
-                case 5: return Quaternion.Euler(pb * 22.5f + si * 40f, pb * 45f + si * 70f, pb * 22.5f);   // one full turn per 16-beat loop
+                case 5: return Quaternion.Euler(pb * 22.5f, pb * 45f, pb * 22.5f);   // one full turn per 16-beat loop
                 case 9: return Quaternion.Euler(-36f, 0f, 0f);
                 case 12: return Quaternion.Euler(-14f * (0.5f - 0.5f * Mathf.Cos(pb * Mathf.PI * 2f / 24f)), 0f, 0f);
                 default: return Quaternion.Euler(Mathf.Sin(pb * 0.2f) * 3f, Mathf.Sin(pb * 0.17f) * 5f, 0f);
@@ -417,15 +418,21 @@ namespace DjVisuals
                 float bp = bpNow - st.delay;              // the outer two run one beat behind the center
                 float pbRawS = Mathf.Max(0f, bp - phaseStartBeat);
                 float pb = Loop(bp - phaseStartBeat);
-                float dim = si == 0 ? 1f : 0.75f;
+                float dim = 1f;
 
                 // orientation and zoom: the whole cube turns in place
                 var target = Orient(si, phase == 5 ? pbRawS : pb);
                 st.rot = Quaternion.Slerp(st.rot, target, 1f - Mathf.Exp(-7f * dt));
                 st.zoom = Mathf.Lerp(st.zoom, ZoomFor(pbNow), 1f - Mathf.Exp(-5f * dt));
                 float breath = phase == 11 ? 1f + 0.08f * Mathf.Sin(bp * Mathf.PI * 0.5f) : 1f;
+                // phase 1: the cube's front edges ARE the edges of its screen (stretched to the panel's 16:9)
+                st.fit = Mathf.Lerp(st.fit, phase == 0 ? 1f : 0f, 1f - Mathf.Exp(-6f * dt));
+                float t16 = Mathf.Tan(16f * Mathf.Deg2Rad);
+                float sy = (CamDist * t16) / (S * 0.5f + S * 0.5f * t16) * 0.99f;   // front face half-height meets the screen edge
+                float sx = sy * (16f / 9f);
+                float zoomF = st.zoom * breath;
                 st.root.localRotation = st.rot;
-                st.root.localScale = Vector3.one * st.zoom * breath;
+                st.root.localScale = new Vector3(Mathf.Lerp(zoomF, sx * zoomF, st.fit), Mathf.Lerp(zoomF, sy * zoomF, st.fit), Mathf.Lerp(zoomF, sy * zoomF, st.fit));
 
                 // the outer frame
                 float wx = st.x;
