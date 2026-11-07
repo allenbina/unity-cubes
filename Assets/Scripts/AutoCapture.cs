@@ -52,7 +52,14 @@ namespace DjVisuals
                 list.Add(new Step { t = t, kind = "jump", arg = p.ToString() });
                 list.Add(new Step { t = t + 2.0f, kind = "shot", arg = "p" + (p + 1).ToString("00") + "_a" });
                 list.Add(new Step { t = t + 5.5f, kind = "shot", arg = "p" + (p + 1).ToString("00") + "_b" });
-                t += 7f;
+                if (Arg("-djlong") != null)   // keep going across more than one loop (2 s = 4 beats at 120 BPM)
+                {
+                    list.Add(new Step { t = t + 9.5f, kind = "shot", arg = "p" + (p + 1).ToString("00") + "_c" });
+                    list.Add(new Step { t = t + 13.5f, kind = "shot", arg = "p" + (p + 1).ToString("00") + "_d" });
+                    list.Add(new Step { t = t + 17.5f, kind = "shot", arg = "p" + (p + 1).ToString("00") + "_e" });
+                    t += 18.5f;
+                }
+                else t += 7f;
             }
             list.Add(new Step { t = t + 0.5f, kind = "quit" });
             steps = list.ToArray();

@@ -59,6 +59,10 @@ namespace DjVisuals
         float phaseStartBeat;
         float accentEnv, dropEnv, accentX;
 
+        /// <summary>Every phase is a loop: it repeats every LoopLen beats and never ends or goes dark.</summary>
+        float LoopLen { get { return phase == 12 ? 24f : 16f; } }
+        float Loop(float beats) { return Mathf.Repeat(Mathf.Max(0f, beats), LoopLen); }
+
         struct Vals { public float edge, fill, scale, width, tint; public Vector3 off; }
 
         public void Init(VisualActions a, Camera camera, PostFx postFx)
@@ -237,9 +241,9 @@ namespace DjVisuals
                 case 1: return Quaternion.Euler(0f, 0f, 12f);
                 case 2: return Quaternion.Euler(0f, 28f, -14f);
                 case 4: return Quaternion.Euler(-52f, 0f, 0f);                    // tipped toward us: a high-angle view
-                case 5: return Quaternion.Euler(pb * 12f + si * 40f, pb * 20f + si * 70f, pb * 7f);   // tumbling in place
+                case 5: return Quaternion.Euler(pb * 22.5f + si * 40f, pb * 45f + si * 70f, pb * 22.5f);   // one full turn per 16-beat loop
                 case 9: return Quaternion.Euler(-36f, 0f, 0f);
-                case 12: return pb >= 16f ? Quaternion.Euler(-14f, 0f, 0f) : Quaternion.identity;
+                case 12: return Quaternion.Euler(-14f * (0.5f - 0.5f * Mathf.Cos(pb * Mathf.PI * 2f / 24f)), 0f, 0f);
                 default: return Quaternion.Euler(Mathf.Sin(pb * 0.2f) * 3f, Mathf.Sin(pb * 0.17f) * 5f, 0f);
             }
         }
@@ -249,15 +253,15 @@ namespace DjVisuals
             switch (phase)
             {
                 case 2: return 1.5f;                                              // close-up
-                case 12: return pb >= 16f ? 1.9f : 1f;                           // in toward the open column
+                case 12: return Mathf.Lerp(1f, 1.9f, 0.5f - 0.5f * Mathf.Cos(pb * Mathf.PI * 2f / 24f));   // in toward the open column and back
                 default: return 1f;
             }
         }
 
         float TintFor(float pb)
         {
-            if (phase == 0) return Mathf.Clamp01(pb / 24f);                      // red to cool
-            if (phase == 1) return pb < 16f ? 0f : 1f;                           // the red flood, then cool
+            if (phase == 0) return 0f;                                           // red, always
+            if (phase == 1) return pb < 8f ? 0f : 1f;                            // red flood, then cool, every loop
             return 1f;
         }
 
@@ -276,7 +280,6 @@ namespace DjVisuals
             {
                 case 0:
                 {
-                    float fade = Mathf.Clamp01(pb / 24f);
                     // a plain cube: the inner grid stays dark, only the frame and a soft fill show
                     v.edge = 0f;
                     v.fill = 0f;
@@ -284,10 +287,10 @@ namespace DjVisuals
                 }
                 case 1:
                 {
-                    if (pb < 16f) { v.fill = 0.65f * (0.55f + 0.45f * env); v.edge = 1.1f; }
+                    if (pb < 8f) { v.fill = 0.65f * (0.55f + 0.45f * env); v.edge = 1.1f; }
                     else
                     {
-                        v.edge = 0.03f;
+                        v.edge = 0.3f;
                         if (c.grid.y == Mathf.FloorToInt(bp) % n) { v.edge = 2f * (0.5f + 0.5f * env); v.width = 0.07f; }
                     }
                     break;
@@ -302,7 +305,7 @@ namespace DjVisuals
                     break;
                 }
                 case 3: v.edge = 0.9f * (0.55f + 0.45f * env); break;
-                case 4: v.edge = 0.8f * Mathf.Clamp01(pb / 6f) * (0.7f + 0.4f * env); break;
+                case 4: v.edge = 0.8f * (0.7f + 0.4f * env); break;
                 case 5: v.edge = 0.8f * (0.7f + 0.4f * env); break;
                 case 6:   // single cells flood on the beat; a few blocks nudge up
                 {
@@ -326,15 +329,16 @@ namespace DjVisuals
                 }
                 case 9:   // dissolve to sparse lines
                 {
-                    float k = 1f - Mathf.Clamp01(pb / 24f);
-                    v.edge = 0.8f * k * k;
+                    float k = 0.5f + 0.5f * Mathf.Cos(pb * Mathf.PI * 2f / 16f);   // 1 full .. 0 sparse .. 1 full, every loop
+                    v.edge = 0.8f * (0.25f + 0.75f * k * k);
                     v.width = Mathf.Lerp(0.03f, 0.1f, k);
-                    if (Hash(c.id, 7) > k + 0.15f) v.edge = 0f;
+                    if (Hash(c.id, 7) > k + 0.35f) v.edge = 0.2f;
                     break;
                 }
                 case 10:  // built up cell by cell from the bottom, inside the frame
                 {
-                    int visible = Mathf.FloorToInt(pb * 2f) + 1;
+                    float tri = Mathf.PingPong(pb * 2f, count);                      // up for 8 beats, down for 8
+                    int visible = Mathf.Clamp(Mathf.FloorToInt(tri) + 1, 1, count);
                     if (c.order >= visible) { v.edge = 0f; v.scale = 0.001f; }
                     else v.edge = (c.order == visible - 1) ? 2f : 0.8f;
                     break;
@@ -364,10 +368,10 @@ namespace DjVisuals
             float pulse = 0.75f + 0.4f * env;
             switch (phase)
             {
-                case 0: return Mathf.Lerp(1.2f, 0.12f, Mathf.Clamp01(pb / 24f)) * pulse;
-                case 1: return pb < 16f ? 1.8f : 0.12f;
+                case 0: return 1.3f * pulse;
+                case 1: return pb < 8f ? 1.8f : 1.1f;
                 case 3: return 2.2f * pulse;
-                case 9: { float k = 1f - Mathf.Clamp01(pb / 24f); return 1.8f * k * k * pulse; }
+                case 9: { float k = 0.5f + 0.5f * Mathf.Cos(pb * Mathf.PI * 2f / 16f); return 1.8f * (0.5f + 0.5f * k * k) * pulse; }
                 default: return 1.7f * pulse;
             }
         }
@@ -378,7 +382,8 @@ namespace DjVisuals
         {
             float dt = Time.deltaTime;
             float bpNow = actions.Clock.BeatPos;
-            float pbNow = Mathf.Max(0f, bpNow - phaseStartBeat);
+            float pbRaw = Mathf.Max(0f, bpNow - phaseStartBeat);
+            float pbNow = Loop(bpNow - phaseStartBeat);
             float build = actions.Build;
 
             accentEnv = Mathf.Max(0f, accentEnv - dt * 0.7f);
@@ -387,13 +392,13 @@ namespace DjVisuals
 
             if (phase == 12)
             {
-                int want = pbNow < 6f ? 3 : (pbNow < 12f ? 5 : 7);
+                int want = pbNow < 6f ? 3 : (pbNow < 12f ? 5 : (pbNow < 18f ? 7 : 5));
                 if (want != n) Layout(want);
             }
 
             // the camera stays put; only a slow drift and, for the reveal, a pull back
             var sway = new Vector3(Mathf.Sin(Time.time * 0.31f), Mathf.Sin(Time.time * 0.23f), 0f) * (0.1f + build * 0.5f);
-            float dolly = phase == 3 ? Mathf.Lerp(5f, 0f, Mathf.Clamp01(pbNow / 12f)) : 0f;
+            float dolly = phase == 3 ? 2.5f + 2.5f * Mathf.Cos(pbNow * Mathf.PI * 2f / 16f) : 0f;   // pushes in and eases back each loop
             for (int ci = 0; ci < 3; ci++)
             {
                 cams[ci].transform.position = new Vector3(structs[ci].x, 0f, -CamDist + dolly) + sway;
@@ -403,18 +408,19 @@ namespace DjVisuals
 
             var white = new Color(1f, 1f, 1.1f);
             float reveal = 0f;
-            if (phase == 3) reveal = pbNow < 2f ? 1f : Mathf.Exp(-(pbNow - 2f) * 0.6f);
+            if (phase == 3) reveal = pbNow < 1.5f ? 1f : Mathf.Exp(-(pbNow - 1.5f) * 0.5f);   // the flash returns every loop
             reveal = Mathf.Max(reveal, dropEnv);
 
             for (int si = 0; si < 3; si++)
             {
                 var st = structs[si];
                 float bp = bpNow - st.delay;              // the outer two run one beat behind the center
-                float pb = bp - phaseStartBeat;
+                float pbRawS = Mathf.Max(0f, bp - phaseStartBeat);
+                float pb = Loop(bp - phaseStartBeat);
                 float dim = si == 0 ? 1f : 0.75f;
 
                 // orientation and zoom: the whole cube turns in place
-                var target = Orient(si, Mathf.Max(0f, pb));
+                var target = Orient(si, phase == 5 ? pbRawS : pb);
                 st.rot = Quaternion.Slerp(st.rot, target, 1f - Mathf.Exp(-7f * dt));
                 st.zoom = Mathf.Lerp(st.zoom, ZoomFor(pbNow), 1f - Mathf.Exp(-5f * dt));
                 float breath = phase == 11 ? 1f + 0.08f * Mathf.Sin(bp * Mathf.PI * 0.5f) : 1f;
@@ -429,7 +435,7 @@ namespace DjVisuals
                 sh.edge = Mathf.Lerp(sh.edge, fe, 1f - Mathf.Exp(-20f * dt));
                 var shCol = Color.Lerp(Red, Cool, TintFor(pb));
                 shCol = Color.Lerp(shCol, white, Mathf.Clamp01(dropEnv));
-                float shFill = phase == 1 && pb < 16f ? 0.3f : (phase == 0 ? 0.35f * (1f - Mathf.Clamp01(pb / 24f)) * (0.7f + 0.3f * Mathf.Exp(-(bp - Mathf.Floor(bp)) * 6f)) : 0f);
+                float shFill = phase == 1 && pb < 8f ? 0.3f : (phase == 0 ? 0.35f * (0.7f + 0.3f * Mathf.Exp(-(bp - Mathf.Floor(bp)) * 6f)) : 0f);
                 shFill = Mathf.Max(shFill, dropEnv * 0.5f);
                 sh.mpb.SetColor("_Color", shCol);
                 sh.mpb.SetFloat("_Edge", sh.edge);

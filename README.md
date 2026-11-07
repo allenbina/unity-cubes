@@ -4,6 +4,7 @@ A three-screen take on Etienne de Crecy's **Beats 'n' Cubes** live show (Transmu
 
 - **One cube per screen, always.** Each screen has its own camera looking straight at its own cube, so all three are seen identically. Each cube is a bold outer frame divided into a 3x3x3 grid of thinner glowing boxes, with bright dots at the joints and an open center column where the DJ stood, in a black void. The cubes turn, tilt, tumble and zoom in place. The outer two echo the center one a beat late.
 - **Phases from the reference.** Each phase follows a scene from the show. The reference notes are in [`docs/beats-n-cubes-scenes.md`](docs/beats-n-cubes-scenes.md); background research is in [`docs/beats-n-cubes-research.md`](docs/beats-n-cubes-research.md).
+- **Loopable, never dark.** Each phase is a cycle, not a timeline: it repeats every 16 beats (24 for the subdivision phase) and never ends or fades to black. Phases that used to fade out now breathe between full and sparse with the frames always visible; the reveal flash returns every loop; the tumble turns exactly once per loop.
 - **Beat-driven.** Everything is a function of one beat clock. Type a BPM, press Sync on a downbeat of the track you are playing, and it stays in time.
 
 Tested on Unity **6000.0.85f2** (URP 17.0.4, HDR, bloom). No third-party assets.
