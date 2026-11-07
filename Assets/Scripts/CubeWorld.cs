@@ -237,13 +237,16 @@ namespace DjVisuals
         /// <summary>How each cube is turned this phase. The camera never moves, so every screen always shows one whole cube.</summary>
         Quaternion Orient(int si, float pb)
         {
+            // The default is front-on and edge to edge. Effects that tilt do it as a wobble: out and back every loop,
+            // so the edges come inside during the effect and return to the screen edges.
+            float wob = 0.5f - 0.5f * Mathf.Cos(pb * Mathf.PI * 2f / LoopLen);
             switch (phase)
             {
-                case 1: return Quaternion.Euler(0f, 0f, 12f);
-                case 2: return Quaternion.Euler(0f, 28f, -14f);
-                case 4: return Quaternion.Euler(-52f, 0f, 0f);                    // tipped toward us: a high-angle view
+                case 1: return Quaternion.Euler(0f, 0f, 12f * wob);
+                case 2: return Quaternion.Euler(0f, 28f * wob, -14f * wob);
+                case 4: return Quaternion.Euler(-52f * wob, 0f, 0f);                // tipped toward us: a high-angle view
                 case 5: return Quaternion.Euler(pb * 22.5f, pb * 45f, pb * 22.5f);   // one full turn per 16-beat loop
-                case 9: return Quaternion.Euler(-36f, 0f, 0f);
+                case 9: return Quaternion.Euler(-36f * wob, 0f, 0f);
                 case 12: return Quaternion.Euler(-14f * (0.5f - 0.5f * Mathf.Cos(pb * Mathf.PI * 2f / 24f)), 0f, 0f);
                 default: return Quaternion.Euler(Mathf.Sin(pb * 0.2f) * 3f, Mathf.Sin(pb * 0.17f) * 5f, 0f);
             }
@@ -253,8 +256,8 @@ namespace DjVisuals
         {
             switch (phase)
             {
-                case 2: return 1.5f;                                              // close-up
-                case 12: return Mathf.Lerp(1f, 1.9f, 0.5f - 0.5f * Mathf.Cos(pb * Mathf.PI * 2f / 24f));   // in toward the open column and back
+                case 2: return Mathf.Lerp(1f, 0.8f, 0.5f - 0.5f * Mathf.Cos(pb * Mathf.PI * 2f / 16f));   // pulls back inside the screen and returns
+                case 12: return Mathf.Lerp(1f, 0.8f, 0.5f - 0.5f * Mathf.Cos(pb * Mathf.PI * 2f / 24f));   // in toward the open column and back
                 default: return 1f;
             }
         }
@@ -399,7 +402,7 @@ namespace DjVisuals
 
             // the camera stays put; only a slow drift and, for the reveal, a pull back
             var sway = new Vector3(Mathf.Sin(Time.time * 0.31f), Mathf.Sin(Time.time * 0.23f), 0f) * (0.1f + build * 0.5f);
-            float dolly = phase == 3 ? 2.5f + 2.5f * Mathf.Cos(pbNow * Mathf.PI * 2f / 16f) : 0f;   // pushes in and eases back each loop
+            float dolly = phase == 3 ? -2.5f + 2.5f * Mathf.Cos(pbNow * Mathf.PI * 2f / 16f) : 0f;   // pulls back and returns each loop
             for (int ci = 0; ci < 3; ci++)
             {
                 cams[ci].transform.position = new Vector3(structs[ci].x, 0f, -CamDist + dolly) + sway;
@@ -425,8 +428,12 @@ namespace DjVisuals
                 st.rot = Quaternion.Slerp(st.rot, target, 1f - Mathf.Exp(-7f * dt));
                 st.zoom = Mathf.Lerp(st.zoom, ZoomFor(pbNow), 1f - Mathf.Exp(-5f * dt));
                 float breath = phase == 11 ? 1f + 0.08f * Mathf.Sin(bp * Mathf.PI * 0.5f) : 1f;
-                // phase 1: the cube's front edges ARE the edges of its screen (stretched to the panel's 16:9)
-                st.fit = Mathf.Lerp(st.fit, phase == 0 ? 1f : 0f, 1f - Mathf.Exp(-6f * dt));
+                // the cube's front edges ARE the edges of its screen (stretched to the panel's 16:9); only the tumble keeps a plain cube
+                // tilting phases ease from the stretched, edge-to-edge box to a plain cube while they tilt (a tilt on a stretched box skews it)
+                float tiltWob = 0.5f - 0.5f * Mathf.Cos(pbNow * Mathf.PI * 2f / LoopLen);
+                bool tilts = phase == 1 || phase == 2 || phase == 4 || phase == 9;
+                float fitGoal = phase == 5 ? 0f : (tilts ? 1f - tiltWob : 1f);
+                st.fit = Mathf.Lerp(st.fit, fitGoal, 1f - Mathf.Exp(-12f * dt));
                 float t16 = Mathf.Tan(16f * Mathf.Deg2Rad);
                 float sy = (CamDist * t16) / (S * 0.5f + S * 0.5f * t16) * 0.99f;   // front face half-height meets the screen edge
                 float sx = sy * (16f / 9f);
