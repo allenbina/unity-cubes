@@ -52,7 +52,15 @@ namespace DjVisuals
                 list.Add(new Step { t = t, kind = "jump", arg = p.ToString() });
                 list.Add(new Step { t = t + 2.0f, kind = "shot", arg = "p" + (p + 1).ToString("00") + "_a" });
                 list.Add(new Step { t = t + 5.5f, kind = "shot", arg = "p" + (p + 1).ToString("00") + "_b" });
-                if (Arg("-djlong") != null)   // keep going across more than one loop (2 s = 4 beats at 120 BPM)
+                if (Arg("-djwrap") != null)   // shots either side of the 16-beat loop wrap (8 s after the jump at 120 BPM)
+                {
+                    list.Add(new Step { t = t + 7.85f, kind = "shot", arg = "p" + (p + 1).ToString("00") + "_w1" });
+                    list.Add(new Step { t = t + 8.15f, kind = "shot", arg = "p" + (p + 1).ToString("00") + "_w2" });
+                    list.Add(new Step { t = t + 3.85f, kind = "shot", arg = "p" + (p + 1).ToString("00") + "_c1" });   // control pair, same beat offsets, mid-loop
+                    list.Add(new Step { t = t + 4.15f, kind = "shot", arg = "p" + (p + 1).ToString("00") + "_c2" });
+                    t += 9f;
+                }
+                else if (Arg("-djlong") != null)   // keep going across more than one loop (2 s = 4 beats at 120 BPM)
                 {
                     list.Add(new Step { t = t + 9.5f, kind = "shot", arg = "p" + (p + 1).ToString("00") + "_c" });
                     list.Add(new Step { t = t + 13.5f, kind = "shot", arg = "p" + (p + 1).ToString("00") + "_d" });
@@ -62,6 +70,7 @@ namespace DjVisuals
                 else t += 7f;
             }
             list.Add(new Step { t = t + 0.5f, kind = "quit" });
+            list.Sort((x, y) => x.t.CompareTo(y.t));
             steps = list.ToArray();
         }
 

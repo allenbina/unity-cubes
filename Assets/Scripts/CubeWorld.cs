@@ -372,7 +372,13 @@ namespace DjVisuals
             float pulse = 0.75f + 0.4f * env;
             switch (phase)
             {
-                case 0: return 1.3f * pulse;
+                case 0:
+                {
+                    // behaviors that happen: now and then, on a beat nobody can predict, the frame flares
+                    int bi0 = Mathf.FloorToInt(bp);
+                    float flare = Hash(bi0, 77) < 0.16f ? 1.4f * env : 0f;
+                    return 1.1f * pulse + flare;
+                }
                 case 1: return pb < 8f ? 1.8f : 1.1f;
                 case 3: return 2.2f * pulse;
                 case 9: { float k = 0.5f + 0.5f * Mathf.Cos(pb * Mathf.PI * 2f / 16f); return 1.8f * (0.5f + 0.5f * k * k) * pulse; }
@@ -424,7 +430,7 @@ namespace DjVisuals
                 float dim = 1f;
 
                 // orientation and zoom: the whole cube turns in place
-                var target = Orient(si, phase == 5 ? pbRawS : pb);
+                var target = Orient(si, pbRawS);   // continuous time: the loop counter must never be visible
                 st.rot = Quaternion.Slerp(st.rot, target, 1f - Mathf.Exp(-7f * dt));
                 st.zoom = Mathf.Lerp(st.zoom, ZoomFor(pbNow), 1f - Mathf.Exp(-5f * dt));
                 float breath = phase == 11 ? 1f + 0.08f * Mathf.Sin(bp * Mathf.PI * 0.5f) : 1f;
