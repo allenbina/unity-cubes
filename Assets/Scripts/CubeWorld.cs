@@ -52,6 +52,7 @@ namespace DjVisuals
             public float zoom = 1f;
             public float fit;                       // 0 = plain cube, 1 = stretched to fill its screen exactly
             public Transform glow; public Material glowMat;
+            public Transform barH, barV; public Material barHMat, barVMat;   // bars of light across the front face
         }
         readonly Struct[] structs = new Struct[3];   // 0 center, 1 left, 2 right
 
@@ -108,6 +109,11 @@ namespace DjVisuals
                 st.glowMat = Mats.Additive(new Color(9f, 9f, 10f, 1f), 1.2f);
                 st.glowMat.SetFloat("_VC", 0f);
                 st.glow = Mats.Prim(PrimitiveType.Quad, root, "Backlight", Vector3.zero, Vector3.one * 9f, st.glowMat).transform;
+                // bars of light that scan across the box's front face (replace the inner grid in single-box phases)
+                st.barHMat = Mats.Additive(new Color(3f, 3f, 3.3f, 0f), 0.9f); st.barHMat.SetFloat("_VC", 0f);
+                st.barVMat = Mats.Additive(new Color(3f, 3f, 3.3f, 0f), 0.9f); st.barVMat.SetFloat("_VC", 0f);
+                st.barH = Mats.Prim(PrimitiveType.Quad, root, "BarH", new Vector3(0f, 0f, -S * 0.5f - 0.03f), Vector3.one, st.barHMat).transform;
+                st.barV = Mats.Prim(PrimitiveType.Quad, root, "BarV", new Vector3(0f, 0f, -S * 0.5f - 0.03f), Vector3.one, st.barVMat).transform;
                 structs[i] = st;
             }
 
@@ -210,6 +216,48 @@ namespace DjVisuals
 
         // =================== phases ===================
 
+        /// <summary>Phases that need the inner grid of boxes (cells, shelves, extrusions, subdivision). Everything else is one box per screen.</summary>
+        bool GridPhase { get { return phase == 6 || phase == 7 || phase == 8 || phase == 12; } }
+
+        /// <summary>Bars of light across the front face, for the single-box phases. Coordinates are local to the cube (it spans -5 to 5).</summary>
+        void UpdateBars(Struct st, float bp, float pb, float dt)
+        {
+            float h = 0f, v = 0f, ha = 0f, va = 0f;          // positions and alphas
+            float hw = S, vh = S, hHeight = 0.4f, vWidth = 0.4f;
+            Color hc = new Color(3f, 3f, 3.3f), vc = hc;
+            float fr = bp - Mathf.Floor(bp);
+            float env = Mathf.Exp(-fr * 6f);
+            if (phase == 1 && pb >= 8f)                       // flood is over: one white line sweeps up and down
+            {
+                h = Mathf.Lerp(-S * 0.5f, S * 0.5f, Mathf.PingPong(bp * 0.25f, 1f));
+                ha = 0.9f;
+            }
+            else if (phase == 2)                              // trace: a bar sweeps one way, another the other
+            {
+                h = Mathf.Lerp(-S * 0.5f, S * 0.5f, Mathf.PingPong(bp * 0.35f, 1f));
+                v = Mathf.Lerp(-S * 0.5f, S * 0.5f, Mathf.PingPong(bp * 0.5f + 0.5f, 1f));
+                ha = 0.7f + 0.3f * env; va = 0.7f + 0.3f * env;
+            }
+            else if (phase == 10)                             // build: light rises up the box and drains away
+            {
+                float tri = Mathf.PingPong(pb * 2f, 16f) / 16f;   // 0..1..0 over the loop
+                float level = Mathf.Lerp(0.04f, 1f, tri);
+                hHeight = S * level; h = -S * 0.5f + hHeight * 0.5f; hw = S;
+                hc = new Color(0.5f, 1.1f, 1.5f); ha = 0.3f + 0.15f * env;
+            }
+            Place(st.barH, st.barHMat, 0f, h, hw, hHeight, hc, ha);
+            Place(st.barV, st.barVMat, v, 0f, vWidth, vh, vc, va);
+        }
+
+        void Place(Transform t, Material m, float x, float y, float w, float hgt, Color c, float alpha)
+        {
+            t.localPosition = new Vector3(x, y, -S * 0.5f - 0.03f);
+            t.localScale = new Vector3(w, hgt, 1f);
+            c.a = alpha;
+            m.SetColor("_Color", c);
+            t.gameObject.SetActive(alpha > 0.01f);
+        }
+
         void SetPhase(int p)
         {
             phase = ((p % PhaseNames.Length) + PhaseNames.Length) % PhaseNames.Length;
@@ -256,6 +304,7 @@ namespace DjVisuals
         {
             switch (phase)
             {
+                case 3: return Mathf.Lerp(1f, 0.82f, 0.5f - 0.5f * Mathf.Cos(pb * Mathf.PI * 2f / 16f));   // the reveal pulls back inside the screen and returns
                 case 2: return Mathf.Lerp(1f, 0.8f, 0.5f - 0.5f * Mathf.Cos(pb * Mathf.PI * 2f / 16f));   // pulls back inside the screen and returns
                 case 12: return Mathf.Lerp(1f, 0.8f, 0.5f - 0.5f * Mathf.Cos(pb * Mathf.PI * 2f / 24f));   // in toward the open column and back
                 default: return 1f;
@@ -408,7 +457,7 @@ namespace DjVisuals
 
             // the camera stays put; only a slow drift and, for the reveal, a pull back
             var sway = new Vector3(Mathf.Sin(Time.time * 0.31f), Mathf.Sin(Time.time * 0.23f), 0f) * (0.1f + build * 0.5f);
-            float dolly = phase == 3 ? -2.5f + 2.5f * Mathf.Cos(pbNow * Mathf.PI * 2f / 16f) : 0f;   // pulls back and returns each loop
+            float dolly = 0f;   // cameras never move back: that would show the neighbouring screen's cube
             for (int ci = 0; ci < 3; ci++)
             {
                 cams[ci].transform.position = new Vector3(structs[ci].x, 0f, -CamDist + dolly) + sway;
@@ -433,7 +482,7 @@ namespace DjVisuals
                 var target = Orient(si, pbRawS);   // continuous time: the loop counter must never be visible
                 st.rot = Quaternion.Slerp(st.rot, target, 1f - Mathf.Exp(-7f * dt));
                 st.zoom = Mathf.Lerp(st.zoom, ZoomFor(pbNow), 1f - Mathf.Exp(-5f * dt));
-                float breath = phase == 11 ? 1f + 0.08f * Mathf.Sin(bp * Mathf.PI * 0.5f) : 1f;
+                float breath = phase == 11 ? 1f - 0.1f * (0.5f + 0.5f * Mathf.Sin(bp * Mathf.PI * 0.5f)) : 1f;   // inward only, returns to the screen edges
                 // the cube's front edges ARE the edges of its screen (stretched to the panel's 16:9); only the tumble keeps a plain cube
                 // tilting phases ease from the stretched, edge-to-edge box to a plain cube while they tilt (a tilt on a stretched box skews it)
                 float tiltWob = 0.5f - 0.5f * Mathf.Cos(pbNow * Mathf.PI * 2f / LoopLen);
@@ -464,8 +513,11 @@ namespace DjVisuals
                 sh.r.SetPropertyBlock(sh.mpb);
                 sh.t.gameObject.SetActive(sh.edge > 0.01f || shFill > 0.01f);
 
-                // the inner boxes
-                for (int c = 0; c < st.active; c++)
+                // single-box phases: the grid is off and bars of light carry the behavior. Grid phases: the inner boxes.
+                bool gridPhase = GridPhase;
+                for (int pc = 0; pc < st.pool.Count; pc++) st.pool[pc].t.gameObject.SetActive(gridPhase && pc < st.active);
+                UpdateBars(st, bp, pb, dt);
+                if (gridPhase) for (int c = 0; c < st.active; c++)
                 {
                     var cell = st.pool[c];
                     var v = Eval(cell, bp, pb, st.active);
