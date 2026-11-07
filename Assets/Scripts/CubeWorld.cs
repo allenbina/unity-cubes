@@ -277,8 +277,9 @@ namespace DjVisuals
                 case 0:
                 {
                     float fade = Mathf.Clamp01(pb / 24f);
-                    v.edge = Mathf.Lerp(0.5f, 0.08f, fade) * (0.7f + 0.5f * env);
-                    v.fill = (1f - fade) * 0.5f * (c.grid.z == 0 ? 1f : 0.25f) * (0.6f + 0.6f * env);
+                    // a plain cube: the inner grid stays dark, only the frame and a soft fill show
+                    v.edge = 0f;
+                    v.fill = 0f;
                     break;
                 }
                 case 1:
@@ -428,7 +429,7 @@ namespace DjVisuals
                 sh.edge = Mathf.Lerp(sh.edge, fe, 1f - Mathf.Exp(-20f * dt));
                 var shCol = Color.Lerp(Red, Cool, TintFor(pb));
                 shCol = Color.Lerp(shCol, white, Mathf.Clamp01(dropEnv));
-                float shFill = phase == 1 && pb < 16f ? 0.3f : (phase == 0 ? 0.2f * (1f - Mathf.Clamp01(pb / 24f)) : 0f);
+                float shFill = phase == 1 && pb < 16f ? 0.3f : (phase == 0 ? 0.35f * (1f - Mathf.Clamp01(pb / 24f)) * (0.7f + 0.3f * Mathf.Exp(-(bp - Mathf.Floor(bp)) * 6f)) : 0f);
                 shFill = Mathf.Max(shFill, dropEnv * 0.5f);
                 sh.mpb.SetColor("_Color", shCol);
                 sh.mpb.SetFloat("_Edge", sh.edge);
