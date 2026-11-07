@@ -10,7 +10,7 @@ namespace DjVisuals
     /// </summary>
     public static class Bootstrap
     {
-        const int PanelCount = 3;
+        const int Cols = 3, Rows = 2;      // six boxes: 1 2 3 on top, 4 5 6 below (the DJ stands in front of 5)
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Start()
@@ -26,7 +26,7 @@ namespace DjVisuals
             actions.Clock = clock;
 
             // One wide render, cropped into one window per screen by the control strip.
-            var rt = new RenderTexture(1280 * PanelCount, 720, 24, RenderTextureFormat.ARGB32) { name = "WideView" };
+            var rt = new RenderTexture(1280 * Cols, 720 * Rows, 24, RenderTextureFormat.ARGB32) { name = "WideView" };
             rt.Create();
 
             var camGo = new GameObject("MainCamera");
@@ -59,7 +59,7 @@ namespace DjVisuals
             var strip = root.AddComponent<ControlStrip>();
             strip.Actions = actions;
             strip.Wide = rt;
-            strip.PanelCount = PanelCount;
+            strip.Cols = Cols; strip.Rows = Rows;
 
             var capDir = AutoCapture.ArgDir();
             if (capDir != null)

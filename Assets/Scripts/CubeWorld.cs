@@ -5,17 +5,17 @@ using UnityEngine.Rendering.Universal;
 namespace DjVisuals
 {
     /// <summary>
-    /// The Cube world: a three-screen take on Etienne de Crecy's Beats 'n' Cubes (Transmusicales 2007).
-    /// Exactly ONE cube per screen, always. Each cube is a bold outer frame divided into a 3x3x3 grid of glowing boxes
+    /// The Cube world: a six-box take on Etienne de Crecy's Beats 'n' Cubes (Transmusicales 2007).
+    /// Exactly ONE box per panel, always: six panels in a 3x2 grid (1 2 3 over 4 5 6; the DJ stands in front of 5). Each cube is a bold outer frame divided into a 3x3x3 grid of glowing boxes
     /// (thinner and dimmer), with an open center column where the DJ stood. The camera stays fixed; the cubes turn, tilt,
     /// tumble and zoom in place. Thirteen phases come from the scenes of the reference video
-    /// (docs/beats-n-cubes-scenes.md); Progress (P) advances. The outer two cubes echo the center one a beat late.
+    /// (docs/beats-n-cubes-scenes.md); Progress (P) advances. All six act as one virtual object.
     /// All animation is a function of the beat clock, so it stays in time at any BPM.
     /// </summary>
     public class CubeWorld : MonoBehaviour
     {
         const float S = 10f;                 // edge length of one cube
-        const float WideAspect = 3840f / 720f;
+        const int Cols = 3, Rows = 2, Count = 6;   // boxes numbered 1..6 = index 0..5, row by row from the top left
         const float CamDist = 25f;
 
         public static readonly string[] PhaseNames =
@@ -30,7 +30,7 @@ namespace DjVisuals
         VisualActions actions;
         Camera cam;
         PostFx fx;
-        readonly Camera[] cams = new Camera[3];   // one camera per screen, indexed like structs: 0 center, 1 left, 2 right
+        readonly Camera[] cams = new Camera[Count];   // one camera per box
         Mesh cubeMesh;
         Material edgeMat;
 
@@ -47,14 +47,14 @@ namespace DjVisuals
         {
             public Transform root; public List<Cell> pool = new List<Cell>(); public int active;
             public Cell shell;                      // the one bold outer frame
-            public float delay, x;
+            public float delay, x, y;
             public Quaternion rot = Quaternion.identity;
             public float zoom = 1f;
             public float fit;                       // 0 = plain cube, 1 = stretched to fill its screen exactly
             public Transform glow; public Material glowMat;
             public Transform barH, barV; public Material barHMat, barVMat;   // bars of light across the front face
         }
-        readonly Struct[] structs = new Struct[3];   // 0 center, 1 left, 2 right
+        readonly Struct[] structs = new Struct[Count];   // index = box number - 1
 
         int n = 3;
         int phase;
@@ -87,13 +87,14 @@ namespace DjVisuals
             Destroy(tmp);
             edgeMat = new Material(Shader.Find("DjVisuals/BoxEdge"));
 
-            float spacing = 2f * CamDist * Mathf.Tan(16f * Mathf.Deg2Rad) * WideAspect / 3f;   // one cube per panel
-            for (int i = 0; i < 3; i++)
+            float halfH = CamDist * Mathf.Tan(16f * Mathf.Deg2Rad);
+            float spacingX = 4f * halfH * (16f / 9f), spacingY = 4f * halfH;   // far apart in the world so no camera ever sees a neighbour box (each panel is 16:9)
+            for (int i = 0; i < Count; i++)
             {
                 var root = new GameObject("Cube" + i).transform;
                 root.SetParent(transform);
-                var st = new Struct { root = root, delay = 0f, x = i == 0 ? 0f : (i == 1 ? -spacing : spacing) };
-                root.localPosition = new Vector3(st.x, 0f, 0f);
+                var st = new Struct { root = root, delay = 0f, x = (i % Cols - 1) * spacingX, y = (0.5f - i / Cols) * spacingY };
+                root.localPosition = new Vector3(st.x, st.y, 0f);
 
                 // the bold outer frame
                 var sg = new GameObject("Frame");
@@ -120,10 +121,12 @@ namespace DjVisuals
             // One camera per screen, each looking straight at its own cube, so the three cubes are seen identically
             // (a single wide camera would show the outer two from the side).
             var tex = cam.targetTexture;
-            cam.rect = new Rect(0f, 0f, 1f / 3f, 1f);
-            cams[1] = cam;
-            cams[0] = MakeCam("CameraCenter", new Rect(1f / 3f, 0f, 1f / 3f, 1f), tex);
-            cams[2] = MakeCam("CameraRight", new Rect(2f / 3f, 0f, 1f / 3f, 1f), tex);
+            for (int i = 0; i < Count; i++)
+            {
+                var rect = new Rect((i % Cols) / (float)Cols, 1f - (i / Cols + 1f) / Rows, 1f / Cols, 1f / Rows);
+                if (i == 0) { cam.rect = rect; cams[0] = cam; }
+                else cams[i] = MakeCam("Camera" + (i + 1), rect, tex);
+            }
 
             Layout(3);
             SetPhase(0);
@@ -458,9 +461,9 @@ namespace DjVisuals
             // the camera stays put; only a slow drift and, for the reveal, a pull back
             var sway = new Vector3(Mathf.Sin(Time.time * 0.31f), Mathf.Sin(Time.time * 0.23f), 0f) * (0.1f + build * 0.5f);
             float dolly = 0f;   // cameras never move back: that would show the neighbouring screen's cube
-            for (int ci = 0; ci < 3; ci++)
+            for (int ci = 0; ci < Count; ci++)
             {
-                cams[ci].transform.position = new Vector3(structs[ci].x, 0f, -CamDist + dolly) + sway;
+                cams[ci].transform.position = new Vector3(structs[ci].x, structs[ci].y, -CamDist + dolly) + sway;
                 cams[ci].transform.rotation = Quaternion.identity;
                 cams[ci].fieldOfView = 32f;
             }
@@ -470,7 +473,7 @@ namespace DjVisuals
             if (phase == 3) reveal = pbNow < 1.5f ? 1f : Mathf.Exp(-(pbNow - 1.5f) * 0.5f);   // the flash returns every loop
             reveal = Mathf.Max(reveal, dropEnv);
 
-            for (int si = 0; si < 3; si++)
+            for (int si = 0; si < Count; si++)
             {
                 var st = structs[si];
                 float bp = bpNow - st.delay;              // the outer two run one beat behind the center
@@ -522,7 +525,7 @@ namespace DjVisuals
                     var cell = st.pool[c];
                     var v = Eval(cell, bp, pb, st.active);
 
-                    // a bar of light sweeping across the three screens on Accent
+                    // a bar of light sweeping across the screens on Accent
                     float sweep = accentEnv > 0f ? Mathf.Exp(-Mathf.Pow((wx + cell.basePos.x * st.zoom - accentX) / 9f, 2f)) * 2f * accentEnv : 0f;
                     v.edge += sweep + dropEnv * 2.2f;
                     v.fill = Mathf.Max(v.fill, dropEnv * 0.7f);

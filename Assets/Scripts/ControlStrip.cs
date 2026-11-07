@@ -15,7 +15,7 @@ namespace DjVisuals
     {
         public VisualActions Actions;
         public RenderTexture Wide;
-        public int PanelCount = 3;
+        public int Cols = 3, Rows = 2;
 
         string bpmText = "120";
 
@@ -29,17 +29,24 @@ namespace DjVisuals
 
             // --- panels: one window per screen ---
             const float margin = 8f;
-            float panelW = (W - margin * (PanelCount + 1)) / PanelCount;
+            const float controlsH = 175f;
+            float panelW = (W - margin * (Cols + 1)) / Cols;
+            float maxH = (H - controlsH - margin * (Rows + 1)) / Rows;
+            panelW = Mathf.Min(panelW, maxH * 16f / 9f);
             float panelH = panelW * 9f / 16f;
-            for (int i = 0; i < PanelCount; i++)
-            {
-                var r = new Rect(margin + i * (panelW + margin), margin, panelW, panelH);
-                GUI.DrawTexture(new Rect(r.x - 2, r.y - 2, r.width + 4, r.height + 4), Texture2D.whiteTexture, ScaleMode.StretchToFill, false, 0, new Color(0.15f, 0.15f, 0.17f), 0, 0);
-                GUI.DrawTextureWithTexCoords(r, Wide, new Rect(i / (float)PanelCount, 0, 1f / PanelCount, 1));
-            }
+            float gridW = Cols * panelW + (Cols - 1) * margin;
+            float x0 = (W - gridW) * 0.5f;
+            for (int row = 0; row < Rows; row++)
+                for (int col = 0; col < Cols; col++)
+                {
+                    var r = new Rect(x0 + col * (panelW + margin), margin + row * (panelH + margin), panelW, panelH);
+                    GUI.DrawTexture(new Rect(r.x - 2, r.y - 2, r.width + 4, r.height + 4), Texture2D.whiteTexture, ScaleMode.StretchToFill, false, 0, new Color(0.15f, 0.15f, 0.17f), 0, 0);
+                    // texture v=0 is the bottom, so the top row of boxes is the upper half
+                    GUI.DrawTextureWithTexCoords(r, Wide, new Rect(col / (float)Cols, (Rows - 1 - row) / (float)Rows, 1f / Cols, 1f / Rows));
+                }
 
             // --- control strip ---
-            float y = margin * 2 + panelH;
+            float y = margin * (Rows + 1) + panelH * Rows;
             GUILayout.BeginArea(new Rect(margin, y, W - margin * 2, H - y - margin));
 
             GUILayout.BeginHorizontal();
